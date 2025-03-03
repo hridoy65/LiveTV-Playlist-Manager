@@ -34,13 +34,23 @@ jobs:
       - name: Run Script
         run: npm start
 
-      # Step 6: Commit generated files back to the repository
+      # Step 6: Debugging - List all files
+      - name: Debugging - List Files
+        run: |
+          echo "Listing all files in the current directory:"
+          ls -R
+
+      # Step 7: Commit generated files back to the repository
       - name: Commit Generated Files
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add LiveTV.m3u Channels.json
-          git commit -m "Update playlists" || echo "No changes to commit"
-          git push
+          if [ -f "LiveTV.m3u" ] && [ -f "Channels.json" ]; then
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+            git add LiveTV.m3u Channels.json
+            git commit -m "Update playlists" || echo "No changes to commit"
+            git push
+          else
+            echo "Files not found. Skipping commit."
+          fi
         env:
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} # Reference your custom secret
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
