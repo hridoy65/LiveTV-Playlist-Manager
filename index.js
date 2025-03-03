@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config(); // Load environment variables from .env
 const https = require('https');
 const fs = require('fs-extra');
 
@@ -170,6 +170,52 @@ function buildExtInf(attributes, channelName) {
     await fs.writeFile('LiveTV.m3u', playlistContent);
     await fs.writeFile('Channels.json', channelsJson);
     console.log('Files saved locally.');
+
+    // Prepare Gist data
+    const gistData = JSON.stringify({
+      description: 'Combined LiveTV Playlist and Channel Metadata',
+      public: true,
+      files: {
+        'LiveTV.m3u': { content: playlistContent },
+        'Channels.json': { content: channelsJson },
+      },
+    });
+
+    // Upload to GitHub Gist
+    const apiEndpoint = gistId ? `https://api.github.com/gists/${gistId}` : 'https://api.github.com/gists';
+    const method = gistId ? 'PATCH' : 'POST';
+
+    await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.github.com',
+        path: gistId ? `/gists/${gistId}` : '/gists',
+        method,
+        headers: {
+          Authorization: `token ${githubToken}`,
+          'User-Agent': 'Node.js Script',
+          'Content-Type': 'application/json',
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            const response = JSON.parse(data);
+            console.log(`Gist successfully ${gistId ? 'updated' : 'created'}!`);
+            console.log(`Gist URL: ${response.html_url}`);
+            resolve();
+          } else {
+            reject(new Error(`Failed to upload Gist: ${res.statusCode} - ${data}`));
+          }
+        });
+      });
+
+      req.on('error', (err) => reject(err));
+      req.write(gistData);
+      req.end();
+    });
   } catch (error) {
     console.error('Error:', error.message);
   }
