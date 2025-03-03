@@ -1,0 +1,46 @@
+name: Generate Playlists
+
+on:
+  push:
+    branches:
+      - main # Replace with your branch name (e.g., main or master)
+  schedule:
+    - cron: '0 0 * * *' # Runs daily at midnight UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18 # Use Node.js version 18
+
+      # Step 3: Install dependencies
+      - name: Install Dependencies
+        run: npm install
+
+      # Step 4: Load environment variables from GitHub Secrets
+      - name: Load Environment Variables
+        run: echo "${{ secrets.ENV_VARS }}" > .env
+
+      # Step 5: Run the Node.js script
+      - name: Run Script
+        run: npm start
+
+      # Step 6: Commit generated files back to the repository
+      - name: Commit Generated Files
+        run: |
+          git config --global user.name "Hridoy Mayber"
+          git config --global user.email "rhridoy136@github.com"
+          git add LiveTV.m3u Channels.json
+          git commit -m "Update playlists" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} # Reference your custom secret
