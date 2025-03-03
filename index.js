@@ -9,6 +9,15 @@ const fs = require('fs-extra');
 const githubToken = process.env.GITHUB_TOKEN; // Replace with your GitHub token
 const gistId = process.env.GIST_ID; // Replace with your Gist ID (optional for updates)
 
+console.log("Loaded environment variables:");
+console.log(`GITHUB_TOKEN: ${githubToken ? "Present" : "Missing"}`);
+console.log(`GIST_ID: ${gistId ? "Present" : "Missing"}`);
+
+if (!githubToken) {
+  console.error("Error: GITHUB_TOKEN is missing. Please check your environment variables.");
+  process.exit(1);
+}
+
 // ============================
 // URLs to Fetch
 // ============================
@@ -82,69 +91,76 @@ function buildExtInf(attributes, channelName) {
 // ============================
 
 (async () => {
+  console.log("Starting script...");
+
   let playlistContent = '#EXTM3U\n\n';
   const channels = {};
 
   try {
-    console.log("Starting script...");
-
     // Fetch and process each playlist
     for (const [playlistName, playlistUrl] of Object.entries(urls)) {
       console.log(`Processing playlist: ${playlistName}`);
-      const content = await new Promise((resolve, reject) => {
-        https.get(playlistUrl, (res) => {
-          if (res.statusCode !== 200) {
-            reject(new Error(`Failed to fetch ${playlistUrl}: HTTP ${res.statusCode}`));
-            return;
+      try {
+        const content = await new Promise((resolve, reject) => {
+          https.get(playlistUrl, (res) => {
+            if (res.statusCode !== 200) {
+              reject(new Error(`Failed to fetch ${playlistUrl}: HTTP ${res.statusCode}`));
+            }
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => resolve(data));
+          }).on('error', (err) => reject(err));
+        });
+
+        console.log(`Fetched content for playlist: ${playlistName}`);
+        console.log(`Content length: ${content.length} characters`);
+
+        const lines = content.split('\n');
+
+        let currentAttributes = {};
+        let currentUrl = '';
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('#EXTINF')) {
+            // Parse EXTINF line
+            currentAttributes = parseExtInf(trimmedLine);
+            currentAttributes['group-title'] = playlistName;
+
+            // Collect channel metadata
+            const channelKey = currentAttributes.name.toLowerCase();
+            if (!channels[channelKey]) {
+              channels[channelKey] = {
+                name: currentAttributes.name,
+                category: currentAttributes['group-title'],
+                'tvg-logo': currentAttributes['tvg-logo'] || '',
+              };
+            }
+
+            // Rebuild EXTINF line with updated group-title
+            const modifiedExtInf = buildExtInf(currentAttributes, currentAttributes.name);
+            playlistContent += `${modifiedExtInf}\n`;
+          } else if (trimmedLine && trimmedLine.startsWith('http')) {
+            // This is the URL for the previous EXTINF
+            currentUrl = trimmedLine;
+            playlistContent += `${currentUrl}\n\n`;
+          } else {
+            // Append other lines as-is
+            playlistContent += `${line}\n`;
           }
-          let data = '';
-          res.on('data', (chunk) => (data += chunk));
-          res.on('end', () => resolve(data));
-        }).on('error', (err) => reject(err));
-      });
-
-      const lines = content.split('\n');
-
-      let currentAttributes = {};
-      let currentUrl = '';
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine.startsWith('#EXTINF')) {
-          // Parse EXTINF line
-          currentAttributes = parseExtInf(trimmedLine);
-          currentAttributes['group-title'] = playlistName;
-
-          // Collect channel metadata
-          const channelKey = currentAttributes.name.toLowerCase();
-          if (!channels[channelKey]) {
-            channels[channelKey] = {
-              name: currentAttributes.name,
-              category: currentAttributes['group-title'],
-              'tvg-logo': currentAttributes['tvg-logo'] || '',
-            };
-          }
-
-          // Rebuild EXTINF line with updated group-title
-          const modifiedExtInf = buildExtInf(currentAttributes, currentAttributes.name);
-          playlistContent += `${modifiedExtInf}\n`;
-        } else if (trimmedLine && trimmedLine.startsWith('http')) {
-          // This is the URL for the previous EXTINF
-          currentUrl = trimmedLine;
-          playlistContent += `${currentUrl}\n\n`;
-        } else {
-          // Append other lines as-is
-          playlistContent += `${line}\n`;
         }
+      } catch (fetchError) {
+        console.error(`Error processing playlist ${playlistName}:`, fetchError.message);
       }
     }
+
+    console.log("Finished processing all playlists.");
 
     // Prepare JSON metadata
     const channelsList = Object.values(channels);
     channelsList.sort((a, b) => a.name.localeCompare(b.name));
     const channelsJson = JSON.stringify(channelsList, null, 2);
 
-    // Log generated content
     console.log("Generated playlist content:");
     console.log(playlistContent);
     console.log("Generated channels metadata:");
@@ -154,52 +170,6 @@ function buildExtInf(attributes, channelName) {
     await fs.writeFile('LiveTV.m3u', playlistContent);
     await fs.writeFile('Channels.json', channelsJson);
     console.log('Files saved locally.');
-
-    // Prepare Gist data
-    const gistData = JSON.stringify({
-      description: 'Combined LiveTV Playlist and Channel Metadata',
-      public: true,
-      files: {
-        'LiveTV.m3u': { content: playlistContent },
-        'Channels.json': { content: channelsJson },
-      },
-    });
-
-    // Upload to GitHub Gist
-    const apiEndpoint = gistId ? `https://api.github.com/gists/${gistId}` : 'https://api.github.com/gists';
-    const method = gistId ? 'PATCH' : 'POST';
-
-    await new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.github.com',
-        path: gistId ? `/gists/${gistId}` : '/gists',
-        method,
-        headers: {
-          Authorization: `token ${githubToken}`,
-          'User-Agent': 'Node.js Script',
-          'Content-Type': 'application/json',
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            const response = JSON.parse(data);
-            console.log(`Gist successfully ${gistId ? 'updated' : 'created'}!`);
-            console.log(`Gist URL: ${response.html_url}`);
-            resolve();
-          } else {
-            reject(new Error(`Failed to upload Gist: ${res.statusCode} - ${data}`));
-          }
-        });
-      });
-
-      req.on('error', (err) => reject(err));
-      req.write(gistData);
-      req.end();
-    });
   } catch (error) {
     console.error('Error:', error.message);
   }
