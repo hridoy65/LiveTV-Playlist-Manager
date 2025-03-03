@@ -26,9 +26,11 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      # Step 4: Load environment variables from GitHub Secrets
-      - name: Load Environment Variables
-        run: echo "${{ secrets.ENV_VARS }}" > .env
+      # Step 4: Create .env file dynamically
+      - name: Create .env File
+        run: |
+          echo "GITHUB_TOKEN=${{ secrets.MY_GITHUB_TOKEN }}" > .env
+          echo "GIST_ID=7c68f7070cf9842ba8293e3bb507a1a3" >> .env
 
       # Step 5: Run the Node.js script
       - name: Run Script
