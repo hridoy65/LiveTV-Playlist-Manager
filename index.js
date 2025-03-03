@@ -86,11 +86,17 @@ function buildExtInf(attributes, channelName) {
   const channels = {};
 
   try {
+    console.log("Starting script...");
+
     // Fetch and process each playlist
     for (const [playlistName, playlistUrl] of Object.entries(urls)) {
       console.log(`Processing playlist: ${playlistName}`);
       const content = await new Promise((resolve, reject) => {
         https.get(playlistUrl, (res) => {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Failed to fetch ${playlistUrl}: HTTP ${res.statusCode}`));
+            return;
+          }
           let data = '';
           res.on('data', (chunk) => (data += chunk));
           res.on('end', () => resolve(data));
@@ -137,6 +143,12 @@ function buildExtInf(attributes, channelName) {
     const channelsList = Object.values(channels);
     channelsList.sort((a, b) => a.name.localeCompare(b.name));
     const channelsJson = JSON.stringify(channelsList, null, 2);
+
+    // Log generated content
+    console.log("Generated playlist content:");
+    console.log(playlistContent);
+    console.log("Generated channels metadata:");
+    console.log(channelsJson);
 
     // Save files locally
     await fs.writeFile('LiveTV.m3u', playlistContent);
