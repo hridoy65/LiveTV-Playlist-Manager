@@ -34,13 +34,17 @@ jobs:
       - name: Run Script
         run: npm start
 
-      # Step 6: Debugging - List all files
+      # Step 6: Debugging - Check Working Directory
+      - name: Debugging - Check Working Directory
+        run: pwd
+
+      # Step 7: Debugging - List Files
       - name: Debugging - List Files
         run: |
           echo "Listing all files in the current directory:"
           ls -R
 
-      # Step 7: Commit generated files back to the repository
+      # Step 8: Commit generated files back to the repository
       - name: Commit Generated Files
         run: |
           if [ -f "LiveTV.m3u" ] && [ -f "Channels.json" ]; then
