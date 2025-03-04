@@ -29,7 +29,7 @@ jobs:
       # Step 4: Create .env File
       - name: Create .env File
         run: |
-          echo "GITHUB_TOKEN=${{ secrets.MY_GITHUB_TOKEN }}" > .env
+          echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" > .env
           echo "GIST_ID=7c68f7070cf9842ba8293e3bb507a1a3" >> .env
 
       # Step 5: Run the Node.js script
@@ -54,7 +54,7 @@ jobs:
             git config --global user.email "actions@github.com"
             git add LiveTV.m3u Channels.json
             git commit -m "Update playlists" || echo "No changes to commit"
-            git push https://${{ secrets.MY_GITHUB_TOKEN }}@github.com/hridoy65/LiveTV-Playlist-Manager.git
+            git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           else
             echo "Files not found. Skipping commit."
           fi
